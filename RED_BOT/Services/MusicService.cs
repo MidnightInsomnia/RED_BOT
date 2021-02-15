@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Victoria;
 using Victoria.Enums;
 using Victoria.EventArgs;
+using Victoria.Responses.Rest;
 
 namespace RED_BOT.Services
 {
@@ -26,25 +27,64 @@ namespace RED_BOT.Services
         {
             _client.Ready += OnReadyAsync;
             _lavaNode.OnLog += LogAsync;
+            _lavaNode.OnTrackStuck += TrackStucked;
+            _lavaNode.OnTrackStarted += NowPlayingAsync;
             _lavaNode.OnTrackEnded += TrackEnded;
+            
             return Task.CompletedTask;
         }
+
+        private Task TrackStucked(TrackStuckEventArgs arg)
+        {
+            Console.WriteLine("STUCKED");
+            return Task.CompletedTask;
+        }
+
+        private async Task NowPlayingAsync(TrackStartEventArgs arg)
+        {
+            var player = arg.Player;
+            var track = arg.Track;
+
+            var embedBuilder = new EmbedBuilder { Description = $"Сейчас играет: [{track.Title}]({track.Url})" };
+
+            var embedMessage = embedBuilder.Build();
+
+            await player.TextChannel.SendMessageAsync(null, false, embedMessage);
+        }
+
+        //public async Task EmbedTrackName(string trackName, string url)
+        //{
+        //    var embedBuilder = new EmbedBuilder { Description = $"Сейчас играет: [{trackName}]({url})" };
+        //    //embedBuilder.AddField("", $"Сейчас играет: [{trackName}]({url})");            
+
+        //    var embedMessage = embedBuilder.Build();
+        //    await ReplyAsync(embed: embedMessage);
+        //}
 
         public async Task<string> PlayAsync(string query, IGuild guildId)
         {
             var _player = _lavaNode.GetPlayer(guildId);
-            //var results = await _lavaNode.SearchYouTubeAsync(query);
-            var results = await _lavaNode.SearchAsync(query);
+
+            SearchResponse searchResponse;
+
+            if (query.Contains("https://youtube.com/playlist?list="))
+            {
+                searchResponse = await _lavaNode.SearchAsync(query);
+            }
+            else
+            {
+                searchResponse = await _lavaNode.SearchYouTubeAsync(query);
+            }                
 
             //var res = await _lavaNode.SearchAsync(query);
 
 
-            if(results.LoadStatus == LoadStatus.NoMatches || results.LoadStatus == LoadStatus.LoadFailed)
+            if(searchResponse.LoadStatus == LoadStatus.NoMatches || searchResponse.LoadStatus == LoadStatus.LoadFailed)
             {
                 return "Совпадения не найдены.";
             }
 
-            IReadOnlyList<LavaTrack> tracks = results.Tracks;
+            IReadOnlyList<LavaTrack> tracks = searchResponse.Tracks;
 
             if (!(_player.PlayerState == PlayerState.Playing))
             {
@@ -54,18 +94,27 @@ namespace RED_BOT.Services
                     {
                         _player.Queue.Enqueue(song);
                     }
-                    await _player.PlayAsync(tracks[0]);
+                    //await _player.PlayAsync(tracks[0]);
                     //return $"Сейчас играет: {tracks[0].Title}";
                     return $"Добавлено {tracks.Count} треков";
                 }
-                _player.Queue.Enqueue(tracks[0]);
-                return $"Трек {tracks[0].Title} добавлен в очередь.";
+                else
+                {
+                    _player.Queue.TryDequeue(out var item);
+                    await _player.PlayAsync(item);
+                    //_player.Queue.Enqueue(tracks[0]);
+                    //Sawait _player.PlayAsync(tracks[0]);
+                    return $"Трек {tracks[0].Title} добавлен в очередь.";
+                }
             }
-
-            await _player.PlayAsync(tracks[0]);
-            return $"Сейчас играет: {tracks[0].Title}";
-
-
+            else
+            {
+                _player.Queue.TryDequeue(out var item);
+                await _player.PlayAsync(item);
+                //_player.Queue.Enqueue(tracks[0]);
+                //await _player.PlayAsync(tracks[0]);
+            }
+            return "А?";
         }
 
         public async Task<string> SkipAsync(IGuild guildId)
@@ -76,7 +125,7 @@ namespace RED_BOT.Services
 
             var oldTrack = _player.Track;
             await _player.SkipAsync();
-            return $"Пропущен трек: {oldTrack.Title} \nСейчас играет: {_player.Track.Title}";
+            return $"Пропущен трек: {oldTrack.Title}";
         }
 
         public async Task<string> SetVolumeAsync(ushort vol, IGuild guildId)
@@ -160,9 +209,10 @@ namespace RED_BOT.Services
             }
             else if (!(_player.PlayerState == PlayerState.Connected))
             {
+                await _lavaNode.LeaveAsync(user.VoiceChannel);
                 return "Бот не подключен ни к одному каналу.";
             }
-            await _lavaNode.LeaveAsync(user.VoiceChannel);
+            //await _lavaNode.LeaveAsync(user.VoiceChannel);
             return $"Бот покинул {user.VoiceChannel.Name}";
         }
 
