@@ -5,4 +5,9 @@
     <TargetFramework>netcoreapp3.1</TargetFramework>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Discord.Net" Version="2.3.0" />
+    <PackageReference Include="Victoria" Version="5.1.11" />
+  </ItemGroup>
+
 </Project>
