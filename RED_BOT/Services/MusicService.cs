@@ -100,6 +100,7 @@ namespace RED_BOT.Services
                 }
                 else
                 {
+                    _player.Queue.Enqueue(tracks[0]);
                     _player.Queue.TryDequeue(out var item);
                     await _player.PlayAsync(item);
                     //_player.Queue.Enqueue(tracks[0]);
