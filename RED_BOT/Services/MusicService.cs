@@ -45,23 +45,19 @@ namespace RED_BOT.Services
             var player = arg.Player;
             var track = arg.Track;
 
-            var embedBuilder = new EmbedBuilder { Description = $"Сейчас играет: [{track.Title}]({track.Url})" };
-
-            var embedMessage = embedBuilder.Build();
-
-            await player.TextChannel.SendMessageAsync(null, false, embedMessage);
+            await SendEmbed($"Сейчас играет: [{track.Title}]({track.Url})", player.TextChannel);
         }
 
-        //public async Task EmbedTrackName(string trackName, string url)
-        //{
-        //    var embedBuilder = new EmbedBuilder { Description = $"Сейчас играет: [{trackName}]({url})" };
-        //    //embedBuilder.AddField("", $"Сейчас играет: [{trackName}]({url})");            
+        private async Task SendEmbed(string message, ITextChannel channel)
+        {
+            EmbedBuilder embedBuilder = null;
 
-        //    var embedMessage = embedBuilder.Build();
-        //    await ReplyAsync(embed: embedMessage);
-        //}
+            embedBuilder = new EmbedBuilder { Description = message };
+            var embedMessage = embedBuilder.Build();
+            await channel.SendMessageAsync(null, false, embedMessage);
+        }
 
-        public async Task<string> PlayAsync(string query, IGuild guildId)
+        public async Task PlayAsync(string query, IGuild guildId)
         {
             var _player = _lavaNode.GetPlayer(guildId);
 
@@ -76,98 +72,105 @@ namespace RED_BOT.Services
                 searchResponse = await _lavaNode.SearchYouTubeAsync(query);
             }                
 
-            //var res = await _lavaNode.SearchAsync(query);
-
-
             if(searchResponse.LoadStatus == LoadStatus.NoMatches || searchResponse.LoadStatus == LoadStatus.LoadFailed)
             {
-                return "Совпадения не найдены.";
+                await SendEmbed("Совпадения не найдены.", _player.TextChannel);
             }
-
-            IReadOnlyList<LavaTrack> tracks = searchResponse.Tracks;
-
-            if (!(_player.PlayerState == PlayerState.Playing))
+            else
             {
+                IReadOnlyList<LavaTrack> tracks = searchResponse.Tracks;
+
                 if (query.Contains("https://youtube.com/playlist?list="))
                 {
                     foreach (var song in tracks)
                     {
                         _player.Queue.Enqueue(song);
                     }
-                    //await _player.PlayAsync(tracks[0]);
-                    //return $"Сейчас играет: {tracks[0].Title}";
-                    return $"Добавлено {tracks.Count} треков";
+                    await SendEmbed($"Добавлено {tracks.Count} треков", _player.TextChannel);
                 }
                 else
                 {
+                    if (_player.PlayerState == PlayerState.Playing || _player.PlayerState == PlayerState.Paused)
+                    {
+                        await SendEmbed($"Трек {tracks[0].Title} добавлен в очередь.", _player.TextChannel);
+                    }
                     _player.Queue.Enqueue(tracks[0]);
+                }
+                
+                if (!(_player.PlayerState == PlayerState.Playing) && (!(_player.PlayerState == PlayerState.Paused)))
+                {
                     _player.Queue.TryDequeue(out var item);
                     await _player.PlayAsync(item);
-                    //_player.Queue.Enqueue(tracks[0]);
-                    //Sawait _player.PlayAsync(tracks[0]);
-                    return $"Трек {tracks[0].Title} добавлен в очередь.";
                 }
             }
-            else
-            {
-                _player.Queue.TryDequeue(out var item);
-                await _player.PlayAsync(item);
-                //_player.Queue.Enqueue(tracks[0]);
-                //await _player.PlayAsync(tracks[0]);
-            }
-            return "А?";
         }
 
-        public async Task<string> SkipAsync(IGuild guildId)
+        public async Task SkipAsync(IGuild guildId)
         {
             var _player = _lavaNode.GetPlayer(guildId);
             if (_player is null || _player.Queue.Count is 0)
-                return "Плейлист пуст.";
-
-            var oldTrack = _player.Track;
-            await _player.SkipAsync();
-            return $"Пропущен трек: {oldTrack.Title}";
-        }
-
-        public async Task<string> SetVolumeAsync(ushort vol, IGuild guildId)
-        {
-            var _player = _lavaNode.GetPlayer(guildId);
-            if (_player is null)
-                return "Плеер ничего не проигрывает.";
-
-            if (vol > 1000 || vol <= 2)
             {
-                return "Уровень звука можно настраивать в диапазоне 2 - 1000 (рекомендуется не более 150, выше - для любителей BASSBOOSTED)";
+                await SendEmbed("Плейлист пуст.", _player.TextChannel);
             }
 
-            await _player.UpdateVolumeAsync(vol);
-            return $"Уровень звука равен: {vol}";
+            await _player.SkipAsync();
         }
 
-        public async Task<string> StopAsync(IGuild guildId)
+        public async Task SetVolumeAsync(ushort vol, IGuild guildId)
         {
+
             var _player = _lavaNode.GetPlayer(guildId);
             if (_player is null)
-                return "Ошибка воспроизведения";
-            await _player.StopAsync();
-            return "Воспроизведение остановлено.";
-        }
-
-        public async Task<string> PauseOrResumeAsync(IGuild guildId)
-        {
-            var _player = _lavaNode.GetPlayer(guildId);
-            if (_player is null)
-                return "Плеер ничего не проигрывает.";
-
-            if (!(_player.PlayerState == PlayerState.Paused))
             {
-                await _player.PauseAsync();
-                return "Пауза.";
+                await SendEmbed("Плеер ничего не проигрывает.", _player.TextChannel);
             }
             else
             {
-                await _player.ResumeAsync();
-                return "Воспроизведение.";
+                if (vol > 1000 || vol <= 2)
+                {
+                    await SendEmbed("Уровень звука можно настраивать в диапазоне 2 - 1000 (рекомендуется не более 150, выше - для любителей BASSBOOSTED)", _player.TextChannel);
+                }
+
+                await _player.UpdateVolumeAsync(vol);
+                await SendEmbed($"Уровень звука равен: {vol}", _player.TextChannel);
+            }
+        }
+
+        public async Task StopAsync(IGuild guildId)
+        {
+            var _player = _lavaNode.GetPlayer(guildId);
+            if (_player is null)
+            {
+                await SendEmbed("Ошибка воспроизведения", _player.TextChannel);
+            }
+            else
+            {
+                _player.Queue.Clear();
+                await _player.StopAsync();
+                await SendEmbed("Воспроизведение остановлено.", _player.TextChannel);
+            }
+        }
+
+        public async Task PauseOrResumeAsync(IGuild guildId)
+        {
+
+            var _player = _lavaNode.GetPlayer(guildId);
+            if (_player is null)
+            {
+                await SendEmbed("Плеер ничего не проигрывает.", _player.TextChannel);
+            }
+            else
+            {
+                if (!(_player.PlayerState == PlayerState.Paused))
+                {
+                    await _player.PauseAsync();
+                    await SendEmbed("Пауза.", _player.TextChannel);
+                }
+                else
+                {
+                    await _player.ResumeAsync();
+                    await SendEmbed("Воспроизведение.", _player.TextChannel);
+                }
             }
         }
 
@@ -181,40 +184,41 @@ namespace RED_BOT.Services
 
             if (!player.Queue.TryDequeue(out var item) || !(item is LavaTrack nextTrack))
             {
-                await player.TextChannel.SendMessageAsync("Плейлист закончился.");
+                await SendEmbed("Плейлист закончился.", player.TextChannel);
                 return;
             }
             await player.PlayAsync(nextTrack);
         }
 
-        public async Task<string> JoinAsync(SocketGuildUser user, ITextChannel textChannel)
+        public async Task JoinAsync(SocketGuildUser user, ITextChannel textChannel)
         {
             if (user.VoiceChannel is null)
             {
-               return "Подключитесь к голосовому каналу";
+                await SendEmbed("Подключитесь к голосовому каналу", textChannel);
             }
             else
             {
                 await _lavaNode.JoinAsync(user.VoiceChannel, textChannel);
-                return $"Бот зашёл в {user.VoiceChannel.Name}";
+                await SendEmbed($"Бот зашёл в {user.VoiceChannel.Name}", textChannel);
             }
         }
 
-        public async Task<string> LeaveAsync(SocketGuildUser user, IGuild guildId)
+        public async Task LeaveAsync(SocketGuildUser user, IGuild guildId)
         {
             var _player = _lavaNode.GetPlayer(guildId);
 
             if (user.VoiceChannel is null)
             {
-                return "Подключитесь к голосовому каналу, чтобы отключить бота.";
+                await SendEmbed("Подключитесь к голосовому каналу, чтобы отключить бота.", _player.TextChannel);
+                return;
             }
             else if (!(_player.PlayerState == PlayerState.Connected))
             {
-                await _lavaNode.LeaveAsync(user.VoiceChannel);
-                return "Бот не подключен ни к одному каналу.";
+                await SendEmbed("Бот не подключен ни к одному каналу.", _player.TextChannel);
+                return;
             }
-            //await _lavaNode.LeaveAsync(user.VoiceChannel);
-            return $"Бот покинул {user.VoiceChannel.Name}";
+            await _lavaNode.LeaveAsync(user.VoiceChannel);
+            await SendEmbed($"Бот покинул {user.VoiceChannel.Name}", _player.TextChannel);
         }
 
         private async Task OnReadyAsync()
