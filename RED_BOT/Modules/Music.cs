@@ -23,11 +23,11 @@ namespace RED_BOT.Modules
 
         [Command("Leave")]
         public async Task Leave()
-            => await _musicService.LeaveAsync(Context.User as SocketGuildUser, Context.Guild);
+            => await _musicService.LeaveAsync(Context.User as SocketGuildUser, Context.Guild, Context.Channel as ITextChannel);
 
         [Command("Play")]
         public async Task Play([Remainder] string querry)
-            => await _musicService.PlayAsync(querry, Context.Guild);
+            => await _musicService.PlayAsync(querry, Context.Guild, Context.User as SocketGuildUser);
 
         [Command("Stop")]
         public async Task Stop()

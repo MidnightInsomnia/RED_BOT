@@ -57,7 +57,7 @@ namespace RED_BOT.Services
             await channel.SendMessageAsync(null, false, embedMessage);
         }
 
-        public async Task PlayAsync(string query, IGuild guildId)
+        public async Task PlayAsync(string query, IGuild guildId, SocketGuildUser user)
         {
             var _player = _lavaNode.GetPlayer(guildId);
 
@@ -92,7 +92,7 @@ namespace RED_BOT.Services
                 {
                     if (_player.PlayerState == PlayerState.Playing || _player.PlayerState == PlayerState.Paused)
                     {
-                        await SendEmbed($"Трек {tracks[0].Title} добавлен в очередь.", _player.TextChannel);
+                        await SendEmbed($"Трек [{tracks[0].Title}]({tracks[0].Url}) добавлен в очередь. [<@{user.Id}>]", _player.TextChannel);
                     }
                     _player.Queue.Enqueue(tracks[0]);
                 }
@@ -203,20 +203,36 @@ namespace RED_BOT.Services
             }
         }
 
-        public async Task LeaveAsync(SocketGuildUser user, IGuild guildId)
+        public async Task LeaveAsync(SocketGuildUser user, IGuild guildId, ITextChannel channel)
         {
-            var _player = _lavaNode.GetPlayer(guildId);
+            LavaPlayer _player = null;
+            try
+            {
+                _player = _lavaNode.GetPlayer(guildId);
+            }
+            catch(Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
+
+            if(_player == null)
+            {
+                await SendEmbed("Бот не подключен ни к одному каналу", channel);
+                return;
+            }
 
             if (user.VoiceChannel is null)
             {
                 await SendEmbed("Подключитесь к голосовому каналу, чтобы отключить бота.", _player.TextChannel);
                 return;
             }
-            else if (!(_player.PlayerState == PlayerState.Connected))
-            {
-                await SendEmbed("Бот не подключен ни к одному каналу.", _player.TextChannel);
-                return;
-            }
+
+            if (_player.PlayerState == PlayerState.Disconnected)
+                if (_player == null)
+                {
+                    await SendEmbed("Бот не подключен ни к одному каналу.", _player.TextChannel);
+                    return;
+                }
             await _lavaNode.LeaveAsync(user.VoiceChannel);
             await SendEmbed($"Бот покинул {user.VoiceChannel.Name}", _player.TextChannel);
         }
