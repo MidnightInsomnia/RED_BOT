@@ -27,7 +27,11 @@ namespace RED_BOT.Modules
 
         [Command("Play")]
         public async Task Play([Remainder] string querry)
-            => await _musicService.PlayAsync(querry, Context.Guild, Context.User as SocketGuildUser);
+            => await _musicService.PlayAsync(querry, Context.Guild, Context.User as SocketGuildUser, Context.Channel as ITextChannel);
+
+        [Command("Playlist")]
+        public async Task Playlist([Remainder] string querry)
+            => await _musicService.PlayAsync(querry, Context.Guild, Context.User as SocketGuildUser, Context.Channel as ITextChannel);
 
         [Command("Stop")]
         public async Task Stop()
@@ -48,5 +52,17 @@ namespace RED_BOT.Modules
         [Command("Resume")]
         public async Task Resume()
             => await _musicService.PauseOrResumeAsync(Context.Guild);
+
+        [Command("Equalizer")]
+        public async Task Equalizer(int band, double gain)
+            => await _musicService.SetEqualizer(band, gain, Context.Guild);
+
+        //[Command("Seek")]
+        //public async Task Seek(int hours, int minutes, int seconds)
+        //    => await _musicService.Seek(hours, minutes, seconds, Context.Guild);
+
+        [Command("Seek")]
+        public async Task Seek(string timeCode)
+            => await _musicService.Seek(timeCode, Context.Guild);
     }
 }

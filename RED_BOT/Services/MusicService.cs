@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Victoria;
 using Victoria.Enums;
 using Victoria.EventArgs;
+using Victoria.Payloads;
 using Victoria.Responses.Rest;
 
 namespace RED_BOT.Services
@@ -57,9 +58,30 @@ namespace RED_BOT.Services
             await channel.SendMessageAsync(null, false, embedMessage);
         }
 
-        public async Task PlayAsync(string query, IGuild guildId, SocketGuildUser user)
+        public async Task PlayAsync(string query, IGuild guildId, SocketGuildUser user, ITextChannel channel)
         {
-            var _player = _lavaNode.GetPlayer(guildId);
+            LavaPlayer _player = null;
+
+            try
+            {
+                _player = _lavaNode.GetPlayer(guildId);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+                await JoinAsync(user, channel);
+                try
+                {
+                    _player = _lavaNode.GetPlayer(guildId);
+                }
+                catch (Exception exp)
+                {
+                    Console.WriteLine(ex.Message);
+                }
+            }
+            
+            if (_player == null)
+                return;
 
             SearchResponse searchResponse;
 
@@ -86,7 +108,7 @@ namespace RED_BOT.Services
                     {
                         _player.Queue.Enqueue(song);
                     }
-                    await SendEmbed($"Добавлено {tracks.Count} треков", _player.TextChannel);
+                    await SendEmbed($"Добавлено {tracks.Count} треков. [<@{user.Id}>]", _player.TextChannel);
                 }
                 else
                 {
@@ -134,6 +156,101 @@ namespace RED_BOT.Services
                 await _player.UpdateVolumeAsync(vol);
                 await SendEmbed($"Уровень звука равен: {vol}", _player.TextChannel);
             }
+        }
+
+        public async Task SetEqualizer(int band, double gain, IGuild guildId)
+        {
+            //Добавить диапазоны
+            var _player = _lavaNode.GetPlayer(guildId);
+            if (_player is null)
+            {
+                await SendEmbed("Плеер ничего не проигрывает.", _player.TextChannel);
+            }
+            else
+            {
+                await SendEmbed("15 диапазонов (0 - 14) со значениями от -0.25 до 1.0", _player.TextChannel);
+                EqualizerBand equalizer = new EqualizerBand(band, gain);
+                await _player.EqualizerAsync(equalizer);
+            }
+        }
+
+        //public async Task Seek(int hours, int minutes, int seconds, IGuild guildId)
+        //{
+        //    var _player = _lavaNode.GetPlayer(guildId);
+        //    if (_player is null)
+        //    {
+        //        await SendEmbed("Плеер ничего не проигрывает.", _player.TextChannel);
+        //    }
+        //    else
+        //    {
+        //        TimeSpan s = new TimeSpan(hours, minutes, seconds);
+        //        await _player.SeekAsync(s);
+        //    }
+        //}
+
+        public async Task Seek(string timeCode, IGuild guildId)
+        {
+            var _player = _lavaNode.GetPlayer(guildId);
+            if (_player is null)
+            {
+                await SendEmbed("Плеер ничего не проигрывает.", _player.TextChannel);
+            }
+            else
+            {
+                if (!timeCode.Contains(':'))
+                {
+                    await SendEmbed("Введите время в формате ЧЧ:ММ:СС", _player.TextChannel);
+                    return;
+                }
+                var time = await timeParser(timeCode);
+                if (time > _player.Track.Duration || time < _player.Track.Duration)
+                {
+                    await SendEmbed("Указанная временая метка не соответствует продолжительности трека.", _player.TextChannel);
+                }
+                else
+                {
+                    await _player.SeekAsync(time);
+                }
+            }
+        }
+
+        private async Task<TimeSpan> timeParser(string timeCode)
+        {
+            TimeSpan result = new TimeSpan();
+
+            int hours;
+            int minutes;
+            int seconds;
+            int miliseconds;
+
+            string[] subStrings = timeCode.Split(':');
+            switch(subStrings.Length)
+            {
+                case 0:
+                    break;
+                case 2:
+                    minutes = int.Parse(subStrings[0]);
+                    seconds = int.Parse(subStrings[1]);
+                    result = new TimeSpan(0, minutes, seconds);
+                    break;
+                case 3:
+                    hours = int.Parse(subStrings[0]);
+                    minutes = int.Parse(subStrings[1]);
+                    seconds = int.Parse(subStrings[2]);
+                    result = new TimeSpan(hours, minutes, seconds);
+                    break;
+                case 4:
+                    hours = int.Parse(subStrings[0]);
+                    minutes = int.Parse(subStrings[1]);
+                    seconds = int.Parse(subStrings[2]);
+                    miliseconds = int.Parse(subStrings[3]);
+                    result = new TimeSpan(0, hours, minutes, seconds, miliseconds);
+                    break;
+                default:
+                    break;
+            }
+
+            return result;
         }
 
         public async Task StopAsync(IGuild guildId)
