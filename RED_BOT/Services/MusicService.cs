@@ -35,10 +35,12 @@ namespace RED_BOT.Services
             return Task.CompletedTask;
         }
 
-        private Task TrackStucked(TrackStuckEventArgs arg)
+        private async Task TrackStucked(TrackStuckEventArgs arg)
         {
-            Console.WriteLine("STUCKED");
-            return Task.CompletedTask;
+            //var copy = arg.Player.Queue;
+
+            arg.Player.Queue.Clear();
+            await SendEmbed("STUCKED", arg.Player.TextChannel);
         }
 
         private async Task NowPlayingAsync(TrackStartEventArgs arg)
@@ -117,8 +119,8 @@ namespace RED_BOT.Services
                         await SendEmbed($"Трек [{tracks[0].Title}]({tracks[0].Url}) добавлен в очередь. [<@{user.Id}>]", _player.TextChannel);
                     }
                     _player.Queue.Enqueue(tracks[0]);
-                }
-                
+                }                
+
                 if (!(_player.PlayerState == PlayerState.Playing) && (!(_player.PlayerState == PlayerState.Paused)))
                 {
                     _player.Queue.TryDequeue(out var item);
@@ -203,7 +205,7 @@ namespace RED_BOT.Services
                     return;
                 }
                 var time = await timeParser(timeCode);
-                if (time > _player.Track.Duration || time < _player.Track.Duration)
+                if (time > _player.Track.Duration)
                 {
                     await SendEmbed("Указанная временая метка не соответствует продолжительности трека.", _player.TextChannel);
                 }
