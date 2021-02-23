@@ -1,5 +1,6 @@
 ﻿using Discord;
 using Discord.WebSocket;
+using RED_BOT.Enums;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -16,12 +17,14 @@ namespace RED_BOT.Services
         private readonly LavaNode _lavaNode;
         private readonly DiscordSocketClient _client;
         private readonly LogService _logService;
+        private readonly YTListSearcher _ytListSearcher;
 
-        public MusicService(LavaNode lavaNode, DiscordSocketClient client, LogService logService)
+        public MusicService(LavaNode lavaNode, DiscordSocketClient client, LogService logService, YTListSearcher ytListSearcher)
         {
             _client = client;
             _lavaNode = lavaNode;
             _logService = logService;
+            _ytListSearcher = ytListSearcher;
         } 
 
         public Task InitializeAsync()
@@ -38,7 +41,6 @@ namespace RED_BOT.Services
         private async Task TrackStucked(TrackStuckEventArgs arg)
         {
             //var copy = arg.Player.Queue;
-
             arg.Player.Queue.Clear();
             await SendEmbed("STUCKED", arg.Player.TextChannel);
         }
@@ -60,7 +62,7 @@ namespace RED_BOT.Services
             await channel.SendMessageAsync(null, false, embedMessage);
         }
 
-        public async Task PlayAsync(string query, IGuild guildId, SocketGuildUser user, ITextChannel channel)
+        public async Task PlayAsync(string query, IGuild guildId, SocketGuildUser user, ITextChannel channel, SearchMode searchMode)
         {
             LavaPlayer _player = null;
 
@@ -78,25 +80,64 @@ namespace RED_BOT.Services
                 }
                 catch (Exception exp)
                 {
-                    Console.WriteLine(ex.Message);
+                    Console.WriteLine(exp.Message);
                 }
             }
             
             if (_player == null)
                 return;
 
+            bool firstPass = (_player.Queue.Count == 0) ? true : false;
+
             SearchResponse searchResponse;
+
+            //if (query.Contains("https://youtube.com/playlist?list="))
+            //{
+            //    searchResponse = await _lavaNode.SearchAsync(query);
+            //}
 
             if (query.Contains("https://youtube.com/playlist?list="))
             {
-                searchResponse = await _lavaNode.SearchAsync(query);
+                searchMode = SearchMode.YTListLink;
             }
-            else
+            else if (query.Contains("https://soundcloud.com/") && query.Contains("/sets/"))
             {
-                searchResponse = await _lavaNode.SearchYouTubeAsync(query);
-            }                
+                searchMode = SearchMode.CloudListLink;
+            }
 
-            if(searchResponse.LoadStatus == LoadStatus.NoMatches || searchResponse.LoadStatus == LoadStatus.LoadFailed)
+            switch (searchMode)
+            {
+                case SearchMode.CloudSongSearch:
+                    searchResponse = await _lavaNode.SearchSoundCloudAsync(query);
+                    break;
+
+                case SearchMode.CloudListLink:
+                    searchResponse = await _lavaNode.SearchAsync(query);
+                    break;
+
+                case SearchMode.YTListLink:
+                    searchResponse = await _lavaNode.SearchAsync(query);
+                    break;
+
+                case SearchMode.YTListSearch:
+                    var newQuery = await _ytListSearcher.Search(query);
+                    searchResponse = await _lavaNode.SearchAsync(newQuery);
+                    
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.WriteLine($"ВОТ {newQuery}");
+                    Console.ForegroundColor = ConsoleColor.White;
+                    searchMode = SearchMode.YTListLink;
+                    break;
+
+                case SearchMode.YTSongSearch:
+                    searchResponse = await _lavaNode.SearchYouTubeAsync(query);
+                    break;
+                default:
+                    searchResponse = await _lavaNode.SearchYouTubeAsync(query);
+                    break;
+            }
+
+            if (searchResponse.LoadStatus == LoadStatus.NoMatches || searchResponse.LoadStatus == LoadStatus.LoadFailed)
             {
                 await SendEmbed("Совпадения не найдены.", _player.TextChannel);
             }
@@ -104,7 +145,8 @@ namespace RED_BOT.Services
             {
                 IReadOnlyList<LavaTrack> tracks = searchResponse.Tracks;
 
-                if (query.Contains("https://youtube.com/playlist?list="))
+                //if (query.Contains("https://youtube.com/playlist?list="))
+                if (searchMode == SearchMode.YTListLink || searchMode == SearchMode.CloudListLink)
                 {
                     foreach (var song in tracks)
                     {
@@ -119,9 +161,9 @@ namespace RED_BOT.Services
                         await SendEmbed($"Трек [{tracks[0].Title}]({tracks[0].Url}) добавлен в очередь. [<@{user.Id}>]", _player.TextChannel);
                     }
                     _player.Queue.Enqueue(tracks[0]);
-                }                
+                }
 
-                if (!(_player.PlayerState == PlayerState.Playing) && (!(_player.PlayerState == PlayerState.Paused)))
+                if (!(_player.PlayerState == PlayerState.Playing) && (!(_player.PlayerState == PlayerState.Paused) && firstPass))
                 {
                     _player.Queue.TryDequeue(out var item);
                     await _player.PlayAsync(item);
@@ -201,17 +243,25 @@ namespace RED_BOT.Services
             {
                 if (!timeCode.Contains(':'))
                 {
-                    await SendEmbed("Введите время в формате ЧЧ:ММ:СС", _player.TextChannel);
+                    await SendEmbed("Введите время в формате ММ:СС или ЧЧ:ММ:СС или ЧЧ:ММ:СС:МС", _player.TextChannel);
                     return;
                 }
                 var time = await timeParser(timeCode);
                 if (time > _player.Track.Duration)
                 {
-                    await SendEmbed("Указанная временая метка не соответствует продолжительности трека.", _player.TextChannel);
+                    await SendEmbed($"Указанная временая метка не соответствует продолжительности трека.\nДлительность текущего трека: {_player.Track.Duration}", _player.TextChannel);
                 }
                 else
                 {
-                    await _player.SeekAsync(time);
+                    if (_player.Track.CanSeek)
+                    {
+                        await _player.SeekAsync(time);
+                    }
+                    else
+                    {
+                        await SendEmbed("Перемотка данного трека невозможна :( ", _player.TextChannel);
+                    }
+                    
                 }
             }
         }
@@ -228,8 +278,6 @@ namespace RED_BOT.Services
             string[] subStrings = timeCode.Split(':');
             switch(subStrings.Length)
             {
-                case 0:
-                    break;
                 case 2:
                     minutes = int.Parse(subStrings[0]);
                     seconds = int.Parse(subStrings[1]);

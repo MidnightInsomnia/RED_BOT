@@ -19,7 +19,7 @@ namespace RED_BOT
         private readonly LogService _logService;
         private readonly ConfigService _configService;
         private readonly Config _config;
-
+        private readonly YTListSearcher _ytListSearcher;
 
         public RedBotClient()
         {
@@ -39,6 +39,7 @@ namespace RED_BOT
             _logService = new LogService();
             _configService = new ConfigService();
             _config = _configService.GetConfig();
+            _ytListSearcher = new YTListSearcher(_config);
         }
 
         public async Task InitializeAsync()
@@ -65,6 +66,7 @@ namespace RED_BOT
             .AddSingleton(_client)
             .AddSingleton(_cmdService)
             .AddSingleton(_logService)
+            .AddSingleton(_ytListSearcher)
             .AddSingleton<LavaNode>()
             .AddSingleton<LavaConfig>()
             .AddSingleton<MusicService>()

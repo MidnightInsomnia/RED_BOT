@@ -1,6 +1,7 @@
 ﻿using Discord;
 using Discord.Commands;
 using Discord.WebSocket;
+using RED_BOT.Enums;
 using RED_BOT.Services;
 using System;
 using System.Collections.Generic;
@@ -27,11 +28,19 @@ namespace RED_BOT.Modules
 
         [Command("Play")]
         public async Task Play([Remainder] string querry)
-            => await _musicService.PlayAsync(querry, Context.Guild, Context.User as SocketGuildUser, Context.Channel as ITextChannel);
+            => await _musicService.PlayAsync(querry, Context.Guild, Context.User as SocketGuildUser, Context.Channel as ITextChannel, SearchMode.YTSongSearch);
 
-        [Command("Playlist")]
+        [Command("YTList")]
         public async Task Playlist([Remainder] string querry)
-            => await _musicService.PlayAsync(querry, Context.Guild, Context.User as SocketGuildUser, Context.Channel as ITextChannel);
+            => await _musicService.PlayAsync(querry, Context.Guild, Context.User as SocketGuildUser, Context.Channel as ITextChannel, SearchMode.YTListSearch);
+
+        [Command("PlayCloud")]
+        public async Task PlayCloud([Remainder] string querry)
+            => await _musicService.PlayAsync(querry, Context.Guild, Context.User as SocketGuildUser, Context.Channel as ITextChannel, SearchMode.CloudSongSearch);
+
+        [Command("CloudList")]
+        public async Task CloudList([Remainder] string querry)
+            => await _musicService.PlayAsync(querry, Context.Guild, Context.User as SocketGuildUser, Context.Channel as ITextChannel, SearchMode.CloudListSearch);
 
         [Command("Stop")]
         public async Task Stop()

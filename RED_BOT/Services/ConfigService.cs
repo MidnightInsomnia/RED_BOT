@@ -16,6 +16,7 @@ namespace RED_BOT.Services
             config = new Config()
             {
                 Token = "",
+                GoogleApiKey = "",
                 Prefix = ""
             };
         }
